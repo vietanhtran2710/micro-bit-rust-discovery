@@ -3,28 +3,43 @@
 #![no_std]
 
 use cortex_m_rt::entry;
-use rtt_target::{rtt_init_print, rprintln};
+use rtt_target::rtt_init_print;
 use panic_rtt_target as _;
-use microbit::board::Board;
-use microbit::hal::timer::Timer;
-use microbit::hal::prelude::*;
+use microbit::{
+    board::Board,
+    display::blocking::Display,
+    hal::{prelude::*, Timer},
+};
 
 #[entry]
 fn main() -> ! {
     rtt_init_print!();
-    let mut board = Board::take().unwrap();
 
+    let board = Board::take().unwrap();
     let mut timer = Timer::new(board.TIMER0);
-
-    board.display_pins.col1.set_low().unwrap();
-    let mut row1 = board.display_pins.row1;
+    let mut display = Display::new(board.display_pins);
+    let mut light_it_all = [
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+    ];
+    let (mut row, mut col) = (0_i32, 0_i32);
+    let dir: [[i32; 2]; 4] = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+    let mut dir_index = 0;
 
     loop {
-        row1.set_low().unwrap();
-        rprintln!("Dark!");
-        timer.delay_ms(1_000_u16);
-        row1.set_high().unwrap();
-        rprintln!("Light!");
-        timer.delay_ms(1_000_u16);
+        light_it_all[row as usize][col as usize] = 1;
+        display.show(&mut timer, light_it_all, 10);
+        let row_outside: bool = row + dir[dir_index][0] < 0 || row + dir[dir_index][0] >= 5;
+        let col_outside: bool = col + dir[dir_index][1] < 0 || col + dir[dir_index][1] >= 5;
+        if row_outside || col_outside {
+            dir_index = (dir_index + 1) % 4;
+        }
+        light_it_all[row as usize][col as usize] = 0;
+        row += dir[dir_index][0];
+        col += dir[dir_index][1];
+        timer.delay_ms(10_u32);
     }
 }
